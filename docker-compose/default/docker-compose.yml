@@ -46,6 +46,19 @@ services:
     extends:
       file: common-config.yml
       service: microservice-configserver-config
+  inventory:
+    image: "michael/inventory"
+    container_name: inventory-ms
+    ports:
+      - "8080:8080"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "inventory"
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
 
 
 
