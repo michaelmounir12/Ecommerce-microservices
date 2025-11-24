@@ -67,12 +67,25 @@ services:
     image: "michael/inventory"
     container_name: inventory-ms
     ports:
-      - "8080:8080"
+      - "8082:8082"
     depends_on:
       configserver:
         condition: service_healthy
     environment:
       SPRING_APPLICATION_NAME: "inventory"
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+  order:
+    image: "michael/order"
+    container_name: order-ms
+    ports:
+      - "8083:8083"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "order"
     extends:
       file: common-config.yml
       service: microservice-configserver-config
