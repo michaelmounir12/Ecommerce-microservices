@@ -1,20 +1,10 @@
-services:
-#  rabbit:
-#    image: rabbitmq:3.13-management
-#    hostname: rabbitmq
-#    ports:
-#      - "5672:5672"
-#      - "15672:15672"
-#    healthcheck:
-#      test: rabbitmq-diagnostics check_port_connectivity
-#      interval: 10s
-#      timeout: 5s
-#      retries: 10
-#      start_period: 5s
-#    extends:
-#      file: common-config.yml
-#      service: network-deploy-service
+version: "3.9"
 
+services:
+
+  # ===========================
+  # CONFIG SERVER
+  # ===========================
   configserver:
     image: "michael/configserver"
     container_name: configserver-ms
@@ -30,6 +20,9 @@ services:
       file: common-config.yml
       service: microservice-base-config
 
+  # ===========================
+  # EUREKA
+  # ===========================
   eurekaserver:
     image: "michael/eurekaserver"
     container_name: eurekaserver-ms
@@ -50,6 +43,87 @@ services:
     environment:
       SPRING_APPLICATION_NAME: "eurekaserver"
 
+  # =======================================
+  # DATABASES
+  # =======================================
+
+  # PRODUCT DB (Postgres)
+  product-db:
+    image: postgres:16
+    container_name: product-db
+    environment:
+      POSTGRES_USER: product_user
+      POSTGRES_PASSWORD: product_pass
+      POSTGRES_DB: product_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - product_data:/var/lib/postgresql/data
+    networks:
+      - net1
+
+  # INVENTORY DB (Postgres)
+  inventory-db:
+    image: postgres:16
+    container_name: inventory-db
+    environment:
+      POSTGRES_USER: inventory_user
+      POSTGRES_PASSWORD: inventory_pass
+      POSTGRES_DB: inventory_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - inventory_data:/var/lib/postgresql/data
+    networks:
+      - net1
+
+  # ORDER DB (Postgres)
+  order-db:
+    image: postgres:16
+    container_name: order-db
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: order_pass
+      POSTGRES_DB: order_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - order_data:/var/lib/postgresql/data
+    networks:
+      - net1
+
+  # CART DB (MySQL)
+  cart-db:
+    image: mysql:8.0
+    container_name: cart-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cart_db
+      MYSQL_USER: cart_user
+      MYSQL_PASSWORD: cart_pass
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3308:3306"
+    volumes:
+      - cart_data:/var/lib/mysql
+    networks:
+      - net1
+
+  # REDIS (for Cart Service cache)
+  redis:
+    image: redis:7
+    container_name: redis-cart
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - net1
+
+
+  # ===========================
+  # MICROSERVICES
+  # ===========================
+
   product:
     image: "michael/product"
     container_name: product-ms
@@ -58,11 +132,17 @@ services:
     depends_on:
       configserver:
         condition: service_healthy
+      product-db:
+        condition: service_started
     environment:
       SPRING_APPLICATION_NAME: "products"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://product-db:5432/product_db
+      SPRING_DATASOURCE_USERNAME: product_user
+      SPRING_DATASOURCE_PASSWORD: product_pass
     extends:
       file: common-config.yml
       service: microservice-configserver-config
+
   inventory:
     image: "michael/inventory"
     container_name: inventory-ms
@@ -71,11 +151,17 @@ services:
     depends_on:
       configserver:
         condition: service_healthy
+      inventory-db:
+        condition: service_started
     environment:
       SPRING_APPLICATION_NAME: "inventory"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://inventory-db:5432/inventory_db
+      SPRING_DATASOURCE_USERNAME: inventory_user
+      SPRING_DATASOURCE_PASSWORD: inventory_pass
     extends:
       file: common-config.yml
       service: microservice-configserver-config
+
   order:
     image: "michael/order"
     container_name: order-ms
@@ -84,16 +170,58 @@ services:
     depends_on:
       configserver:
         condition: service_healthy
+      order-db:
+        condition: service_started
     environment:
       SPRING_APPLICATION_NAME: "order"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://order-db:5432/order_db
+      SPRING_DATASOURCE_USERNAME: order_user
+      SPRING_DATASOURCE_PASSWORD: order_pass
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+  cart:
+    image: "michael/cart"
+    container_name: cart-ms
+    ports:
+      - "8084:8084"
+    depends_on:
+      configserver:
+        condition: service_healthy
+      cart-db:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      SPRING_APPLICATION_NAME: "cart"
+
+      # MySQL persistent DB
+      SPRING_DATASOURCE_URL: jdbc:mysql://cart-db:3306/cart_db
+      SPRING_DATASOURCE_USERNAME: cart_user
+      SPRING_DATASOURCE_PASSWORD: cart_pass
+
+      # Redis cache config
+      SPRING_REDIS_HOST: redis-cart
+      SPRING_REDIS_PORT: 6379
     extends:
       file: common-config.yml
       service: microservice-configserver-config
 
 
 
+# ===========================
+# VOLUMES
+# ===========================
+volumes:
+  product_data:
+  inventory_data:
+  order_data:
+  cart_data:
 
-
+# ===========================
+# NETWORKS
+# ===========================
 networks:
   net1:
-    driver: "bridge"
+    driver: bridge
