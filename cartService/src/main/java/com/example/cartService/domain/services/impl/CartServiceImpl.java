@@ -1,5 +1,7 @@
 package com.example.cartService.domain.services.impl;
 
+import com.example.cartService.domain.clients.InventoryClient;
+import com.example.cartService.domain.clients.ProductClient;
 import com.example.cartService.domain.entities.Cart;
 import com.example.cartService.domain.entities.CartItem;
 import com.example.cartService.domain.redis.RedisCart;
@@ -8,11 +10,10 @@ import com.example.cartService.domain.repos.CartItemRepo;
 import com.example.cartService.domain.repos.CartRepo;
 import com.example.cartService.domain.services.CartService;
 import com.example.cartService.domain.services.mappers.CartMapper;
-import com.example.cartService.web.models.AddToCartRequest;
-import com.example.cartService.web.models.CartResponse;
-import com.example.cartService.web.models.UpdateCartItemRequest;
+import com.example.cartService.web.models.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -26,6 +27,8 @@ public class CartServiceImpl implements CartService {
     private final CartRepo cartRepository;
     private final CartItemRepo cartItemRepository;
     private final CartMapper cartMapper;
+    private final ProductClient productClient;
+    private final InventoryClient inventoryClient;
 
     private String redisKey(Long userId) {
         return "cart:" + userId;
@@ -51,10 +54,14 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartResponse addToCart(Long userId, AddToCartRequest req) {
-
+            ResponseEntity<ProductResponseDTO> product = productClient.getProduct(req.getProductId());
+            if(product==null || !product.hasBody() || product.getBody()==null) throw new RuntimeException("product not found");
+            ResponseEntity<StockResponseDTO> stock = inventoryClient.getStock(req.getProductId());
+            if(stock==null || !product.hasBody() || stock.getBody()==null || stock.getBody().getQuantity()<req.getQuantity()) throw new RuntimeException("stock insufficient");
         // -----------------------------------
         // 1) Load from Redis OR fallback to DB
         // -----------------------------------
+        req.setPrice(product.getBody().price());
         RedisCart redisCart = (RedisCart) redisTemplate.opsForValue().get(redisKey(userId));
 
         if (redisCart == null) {
@@ -108,7 +115,7 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public CartResponse updateCartItem(Long userId, UpdateCartItemRequest req) {
-
+      
         // 1) Fetch Redis OR rebuild from DB
         RedisCart redisCart = (RedisCart) redisTemplate.opsForValue().get(redisKey(userId));
         if (redisCart == null) {
