@@ -18,7 +18,6 @@ public record ProductRequestDTO(
         BigDecimal price,
 
         @NotNull(message = "Category ID is required")
-        Long categoryId,
-        Integer stock
+        Long categoryId
 
 ) {}

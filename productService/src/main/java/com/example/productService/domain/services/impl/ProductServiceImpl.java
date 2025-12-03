@@ -43,7 +43,6 @@ public class ProductServiceImpl implements ProductService {
         existing.setName(dto.name());
         existing.setDescription(dto.description());
         existing.setPrice( dto.price());
-        existing.setStock(dto.stock());
 
         Category category = categoryRepository.findById(dto.categoryId())
                 .orElseThrow(() -> new RuntimeException("Category not found"));
