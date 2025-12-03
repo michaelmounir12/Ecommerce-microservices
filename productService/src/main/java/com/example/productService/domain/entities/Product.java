@@ -1,5 +1,6 @@
 package com.example.productService.domain.entities;
 
+import com.example.productService.domain.enums.ProductStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -27,7 +28,9 @@ public class Product {
     @Column(nullable = false)
     private BigDecimal price;
 
-
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ProductStatus status=ProductStatus.IN_STOCK;
 
     private String imageUrl;
 
