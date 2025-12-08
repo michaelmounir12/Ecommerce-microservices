@@ -5,6 +5,8 @@ import com.example.inventoryService.domain.entities.Stock;
 import com.example.inventoryService.domain.repos.StockRepo;
 import com.example.inventoryService.domain.services.StockService;
 import com.example.inventoryService.domain.services.mappers.StockMapper;
+import com.example.inventoryService.kafka.StockStatusEvent;
+import com.example.inventoryService.kafka.StockStatusProducer;
 import com.example.inventoryService.web.models.StockRequestDTO;
 import com.example.inventoryService.web.models.StockResponseDTO;
 import com.example.inventoryService.web.models.StockUpdateDTO;
@@ -15,9 +17,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class StockServiceImpl implements StockService {
 
+
     private final StockRepo stockRepository;
     private final StockMapper mapper;
-
+    private final StockStatusProducer stockStatusProducer;
     @Override
     public StockResponseDTO createStock(StockRequestDTO dto) {
         Stock stock = mapper.toEntity(dto);
@@ -36,7 +39,7 @@ public class StockServiceImpl implements StockService {
     public StockResponseDTO updateStock(StockUpdateDTO dto) {
         Stock stock = stockRepository.findByProductId(dto.getProductId())
                 .orElseThrow(() -> new RuntimeException("Stock not found"));
-
+        if(stock.getQuantity()==0) stockStatusProducer.sendStockStatus(new StockStatusEvent(stock.getProductId(), "IN_STOCK"));
         stock.setQuantity(dto.getQuantity());
         stockRepository.save(stock);
 
@@ -52,6 +55,7 @@ public class StockServiceImpl implements StockService {
             throw new RuntimeException("Insufficient stock");
 
         stock.setQuantity(stock.getQuantity() - quantity);
+        if(stock.getQuantity() == 0) stockStatusProducer.sendStockStatus(new StockStatusEvent(stock.getProductId(),"OUT_OF_STOCK"));
         stockRepository.save(stock);
     }
 

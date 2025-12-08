@@ -1,7 +1,8 @@
 spring:
   application:
     name: inventory
-
+  kafka:
+    bootstrap-servers: localhost:9092
   config:
     import: optional:configserver:http://localhost:8071
 
